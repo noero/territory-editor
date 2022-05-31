@@ -52,6 +52,12 @@ class MapFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnExit,  exitItem)
         self.Bind(wx.EVT_MENU, self.OnAbout, aboutItem)
 
+        # TODO menu edition avec popup pour numéro : edit poly & edit paramètres
+        # TODO stop édition poly
+        # TODO création territoire
+        # TODO suppression territoire
+        # TODO feuille blanche
+
     def OnExit(self, event):
         self.Close(True)
 
@@ -83,8 +89,7 @@ class MapFrame(wx.Frame):
                                        fill=True,
                                        fill_color="#" + feature['properties']['TerritoryTypeColor'],
                                        fill_opacity=0.6,
-                                       tooltip=feature['properties']['name'],
-                                       popup=self.customPopup(feature)).add_to(fg)
+                                       tooltip=feature['properties']['name']).add_to(fg)
                 fg.add_to(m)
                 folium.LayerControl().add_to(m)
                 # draw = plugins.Draw(draw_options={'polyline': False,
