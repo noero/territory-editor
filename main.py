@@ -12,6 +12,7 @@ class MapFrame(wx.Frame):
     def __init__(self, *args, **kw):
         super(MapFrame, self).__init__(*args, **kw)
 
+        self.mainMap = None
         self.menuBar = None
         self.features = None
 
@@ -34,7 +35,7 @@ class MapFrame(wx.Frame):
         fileMenu = wx.Menu()
         loadItem = fileMenu.Append(wx.ID_OPEN, "&Load...\tCtrl-L", "Load a JSON file")
         newItem = fileMenu.Append(wx.ID_NEW, "&New", "Blank page")
-        exportItem = fileMenu.Append(wx.ID_SAVE, "&Export\tCtrl-S", "Export as a JSON file")
+        saveItem = fileMenu.Append(wx.ID_SAVE, "&Save\tCtrl-S", "Save as a JSON file")
         fileMenu.AppendSeparator()
         exitItem = fileMenu.Append(wx.ID_EXIT)
 
@@ -57,7 +58,7 @@ class MapFrame(wx.Frame):
 
         self.Bind(wx.EVT_MENU, self.OnLoad, loadItem)
         self.Bind(wx.EVT_MENU, self.OnNew, newItem)
-        self.Bind(wx.EVT_MENU, self.OnExport, exportItem)
+        self.Bind(wx.EVT_MENU, self.OnSave, saveItem)
         self.Bind(wx.EVT_MENU, self.OnExit,  exitItem)
         self.Bind(wx.EVT_MENU, self.OnEditPoly,  editPolyItem)
         self.Bind(wx.EVT_MENU, self.OnEditParam,  editParamItem)
@@ -71,12 +72,6 @@ class MapFrame(wx.Frame):
         self.menuBar.Enable(id=wx.ID_APPLY, enable=False)
         self.menuBar.Enable(id=wx.ID_ADD, enable=False)
         self.menuBar.Enable(id=wx.ID_REMOVE, enable=False)
-
-        # TODO menu edition avec popup pour numéro : edit poly & edit paramètres
-        # TODO stop édition poly
-        # TODO création territoire
-        # TODO suppression territoire
-        # TODO feuille blanche
 
     def OnExit(self, event):
         self.Close(True)
@@ -95,9 +90,9 @@ class MapFrame(wx.Frame):
             # Proceed loading the file chosen by the user
             pathname = fileDialog.GetPath()
             try:
-                # m = folium.Map(
-                #     location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
-                # )
+                self.mainMap = folium.Map(
+                    location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
+                )
                 with open(pathname, 'r') as f:
                     self.features = json.load(f)['features']
                 fg = folium.FeatureGroup(name=pathname.split('/')[-1].split(".")[0].capitalize())
@@ -110,11 +105,11 @@ class MapFrame(wx.Frame):
                                        fill_color="#" + feature['properties']['TerritoryTypeColor'],
                                        fill_opacity=0.6,
                                        tooltip=feature['properties']['name']).add_to(fg)
-                fg.add_to(m)
-                # folium.LayerControl().add_to(m)
+                fg.add_to(self.mainMap)
+                # folium.LayerControl().add_to(self.mainMap)
 
                 dataLoad = io.BytesIO()
-                m.save(dataLoad, close_file=False)
+                self.mainMap.save(dataLoad, close_file=False)
                 frm.browser.SetPage(dataLoad.getvalue().decode(), '')
 
                 self.menuBar.Enable(id=wx.ID_EDIT, enable=True)
@@ -126,7 +121,7 @@ class MapFrame(wx.Frame):
             except IOError:
                 wx.LogError("Cannot open file '%s'." % pathname)
 
-    def OnExport(self, event):
+    def OnSave(self, event):
         wx.MessageBox("Not implemented yet",
                       "",
                       wx.OK | wx.ICON_INFORMATION)
@@ -138,7 +133,7 @@ class MapFrame(wx.Frame):
 
     def OnEditPoly(self, event):
         number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
-        if number != '':
+        if number != '' and number != -1:
             self.menuBar.Enable(id=wx.ID_EDIT, enable=False)
             self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=False)
             self.menuBar.Enable(id=wx.ID_APPLY, enable=True)
@@ -148,20 +143,23 @@ class MapFrame(wx.Frame):
             feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(number)), None)
             if feature is not None:
                 draw = plugins.Draw(draw_options={'polyline': False,
+                                                  'polygon': False,
                                                   'rectangle': False,
                                                   'circle': False,
                                                   'marker': False,
                                                   'circlemarker': False},
-                                    edit_options={'json': json.dumps(feature)})
-                draw.add_to(m)
+                                    edit_options={'remove': False,
+                                                  'feature': json.dumps(feature)},
+                                    export=True)
+                draw.add_to(self.mainMap)
                 dataEditPoly = io.BytesIO()
-                m.save(dataEditPoly, close_file=False)
+                self.mainMap.save(dataEditPoly, close_file=False)
                 frm.browser.SetPage(dataEditPoly.getvalue().decode(), '')
 
                 # Add to draw.py before "options.edit.featureGroup = drawnItems;"
                 #######################################################################################################
-                # if ("json" in options.edit){
-                #     var feature = JSON.parse(options.edit.json);
+                # if ("feature" in options.edit){
+                #     var feature = JSON.parse(options.edit.feature);
                 #     var latlngs = [];
                 #     for (var c of feature.geometry.coordinates[0]){
                 #         latlngs.push([c[1], c[0]]);
@@ -184,9 +182,38 @@ class MapFrame(wx.Frame):
         number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
 
     def OnStopEdit(self, event):
-        wx.MessageBox("Not implemented yet",
-                      "",
-                      wx.OK | wx.ICON_INFORMATION)
+        confirm = wx.MessageBox("You are going to stop editing. Would you like to merge your work?",
+                                "Stop Edition Mode and Merging", wx.YES_NO | wx.CANCEL)
+        if confirm == wx.CANCEL:
+            return
+        if confirm == wx.YES:
+
+            # TODO check if export file, read it, delete it, make changes in $features
+            pass
+
+        self.mainMap = folium.Map(
+            location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
+        )
+        fg = folium.FeatureGroup()
+        for feature in self.features:
+            if feature['geometry']['type'] == 'Polygon':
+                folium.Polygon(locations=[[x[1], x[0]] for x in feature['geometry']['coordinates'][0]],
+                               color="black",
+                               weight=1,
+                               fill=True,
+                               fill_color="#" + feature['properties']['TerritoryTypeColor'],
+                               fill_opacity=0.6,
+                               tooltip=feature['properties']['name']).add_to(fg)
+        fg.add_to(self.mainMap)
+        dataStop = io.BytesIO()
+        self.mainMap.save(dataStop, close_file=False)
+        frm.browser.SetPage(dataStop.getvalue().decode(), '')
+
+        self.menuBar.Enable(id=wx.ID_EDIT, enable=True)
+        self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=True)
+        self.menuBar.Enable(id=wx.ID_APPLY, enable=False)
+        self.menuBar.Enable(id=wx.ID_ADD, enable=True)
+        self.menuBar.Enable(id=wx.ID_REMOVE, enable=True)
 
     def OnCreatePoly(self, event):
         wx.MessageBox("Not implemented yet",
@@ -199,7 +226,7 @@ class MapFrame(wx.Frame):
                       wx.OK | wx.ICON_INFORMATION)
 
     def OnAbout(self, event):
-        wx.MessageBox("Version: 1.0 (development state)"
+        wx.MessageBox("Version: 1.0.1 (development state)"
                       "\nGitHub : https://github.com/noero/Territory_Editor.git"
                       "\nCreator: Romain Damiano",
                       "About Territory Editor",
@@ -394,11 +421,11 @@ class MapFrame(wx.Frame):
 if __name__ == '__main__':
     app = wx.App()
     frm = MapFrame(None, title='Territory Editor')
-    m = folium.Map(
+    frm.mainMap = folium.Map(
         location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
     )
     data = io.BytesIO()
-    m.save(data, close_file=False)
+    frm.mainMap.save(data, close_file=False)
     frm.browser.SetPage(data.getvalue().decode(), '')
     frm.Show()
     app.MainLoop()
