@@ -12,6 +12,9 @@ class MapFrame(wx.Frame):
     def __init__(self, *args, **kw):
         super(MapFrame, self).__init__(*args, **kw)
 
+        self.menuBar = None
+        self.features = None
+
         self.SetSize((1280, 720))
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.browser = wx.html2.WebView.New(self)
@@ -29,28 +32,45 @@ class MapFrame(wx.Frame):
         when the menu item is selected.
         """
         fileMenu = wx.Menu()
-        loadItem = fileMenu.Append(-1, "&Load...\tCtrl-L",
-                                   "Load a JSON file")
-        exportItem = fileMenu.Append(-1, "&Export...\tCtrl-S",
-                                     "Export as a JSON file")
+        loadItem = fileMenu.Append(wx.ID_OPEN, "&Load...\tCtrl-L", "Load a JSON file")
+        newItem = fileMenu.Append(wx.ID_NEW, "&New", "Blank page")
+        exportItem = fileMenu.Append(wx.ID_SAVE, "&Export\tCtrl-S", "Export as a JSON file")
         fileMenu.AppendSeparator()
         exitItem = fileMenu.Append(wx.ID_EXIT)
 
         editMenu = wx.Menu()
+        editPolyItem = editMenu.Append(wx.ID_EDIT, "&Edit Poly", "Edit a polygon (coordinates)")
+        editParamItem = editMenu.Append(wx.ID_PROPERTIES, "&Edit Parameters", "Edit a polygon (parameters)")
+        stopEditItem = editMenu.Append(wx.ID_APPLY, "&Stop Edition", "Close edition mode")
+        fileMenu.AppendSeparator()
+        createItem = editMenu.Append(wx.ID_ADD, "&Create", "Create a polygon")
+        deleteItem = editMenu.Append(wx.ID_REMOVE, "&Delete", "Delete a polygon")
 
         helpMenu = wx.Menu()
         aboutItem = helpMenu.Append(wx.ID_ABOUT, "", " ")
 
-        menuBar = wx.MenuBar()
-        menuBar.Append(fileMenu, "&File")
-        menuBar.Append(editMenu, "&Edit")
-        menuBar.Append(helpMenu, "&Help")
-        self.SetMenuBar(menuBar)
+        self.menuBar = wx.MenuBar()
+        self.menuBar.Append(fileMenu, "&File")
+        self.menuBar.Append(editMenu, "&Edit")
+        self.menuBar.Append(helpMenu, "&Help")
+        self.SetMenuBar(self.menuBar)
 
         self.Bind(wx.EVT_MENU, self.OnLoad, loadItem)
+        self.Bind(wx.EVT_MENU, self.OnNew, newItem)
         self.Bind(wx.EVT_MENU, self.OnExport, exportItem)
         self.Bind(wx.EVT_MENU, self.OnExit,  exitItem)
+        self.Bind(wx.EVT_MENU, self.OnEditPoly,  editPolyItem)
+        self.Bind(wx.EVT_MENU, self.OnEditParam,  editParamItem)
+        self.Bind(wx.EVT_MENU, self.OnStopEdit,  stopEditItem)
+        self.Bind(wx.EVT_MENU, self.OnCreatePoly,  createItem)
+        self.Bind(wx.EVT_MENU, self.OnDeletePoly,  deleteItem)
         self.Bind(wx.EVT_MENU, self.OnAbout, aboutItem)
+
+        self.menuBar.Enable(id=wx.ID_EDIT, enable=False)
+        self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=False)
+        self.menuBar.Enable(id=wx.ID_APPLY, enable=False)
+        self.menuBar.Enable(id=wx.ID_ADD, enable=False)
+        self.menuBar.Enable(id=wx.ID_REMOVE, enable=False)
 
         # TODO menu edition avec popup pour numéro : edit poly & edit paramètres
         # TODO stop édition poly
@@ -75,13 +95,13 @@ class MapFrame(wx.Frame):
             # Proceed loading the file chosen by the user
             pathname = fileDialog.GetPath()
             try:
-                m = folium.Map(
-                    location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
-                )
+                # m = folium.Map(
+                #     location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
+                # )
                 with open(pathname, 'r') as f:
-                    features = json.load(f)['features']
+                    self.features = json.load(f)['features']
                 fg = folium.FeatureGroup(name=pathname.split('/')[-1].split(".")[0].capitalize())
-                for feature in features:
+                for feature in self.features:
                     if feature['geometry']['type'] == 'Polygon':
                         folium.Polygon(locations=[[x[1], x[0]] for x in feature['geometry']['coordinates'][0]],
                                        color="black",
@@ -91,40 +111,89 @@ class MapFrame(wx.Frame):
                                        fill_opacity=0.6,
                                        tooltip=feature['properties']['name']).add_to(fg)
                 fg.add_to(m)
-                folium.LayerControl().add_to(m)
-                # draw = plugins.Draw(draw_options={'polyline': False,
-                #                                   'rectangle': False,
-                #                                   'circle': False,
-                #                                   'marker': False,
-                #                                   'circlemarker': False})
-                #                     # edit_options={'json': json.dumps(features)})
+                # folium.LayerControl().add_to(m)
 
-                # Added to draw.py before "options.edit.featureGroup = drawnItems;"
-                #######################################################################################################
-                # if ("json" in options.edit){
-                #     var geojson = JSON.parse(options.edit.json);
-                #     for (var feature of geojson) {
-                #         var latlngs = [];
-                #         for (var c of feature.geometry.coordinates[0]){
-                #             latlngs.push([c[1], c[0]]);
-                #         }
-                #         L.polygon(latlngs, {color: "#000000",
-                #                             weight: 1,
-                #                             fillColor: "#" + feature.properties.TerritoryTypeColor,
-                #                             fillOpacity: 0.6}).addTo(drawnItems)
-                #     }
-                # }
-                #######################################################################################################
+                dataLoad = io.BytesIO()
+                m.save(dataLoad, close_file=False)
+                frm.browser.SetPage(dataLoad.getvalue().decode(), '')
 
-                # draw.add_to(m)
+                self.menuBar.Enable(id=wx.ID_EDIT, enable=True)
+                self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=True)
+                self.menuBar.Enable(id=wx.ID_APPLY, enable=False)
+                self.menuBar.Enable(id=wx.ID_ADD, enable=True)
+                self.menuBar.Enable(id=wx.ID_REMOVE, enable=True)
 
-                data = io.BytesIO()
-                m.save(data, close_file=False)
-                frm.browser.SetPage(data.getvalue().decode(), '')
             except IOError:
                 wx.LogError("Cannot open file '%s'." % pathname)
 
     def OnExport(self, event):
+        wx.MessageBox("Not implemented yet",
+                      "",
+                      wx.OK | wx.ICON_INFORMATION)
+
+    def OnNew(self, event):
+        wx.MessageBox("Not implemented yet",
+                      "",
+                      wx.OK | wx.ICON_INFORMATION)
+
+    def OnEditPoly(self, event):
+        number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
+        if number != '':
+            self.menuBar.Enable(id=wx.ID_EDIT, enable=False)
+            self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=False)
+            self.menuBar.Enable(id=wx.ID_APPLY, enable=True)
+            self.menuBar.Enable(id=wx.ID_ADD, enable=False)
+            self.menuBar.Enable(id=wx.ID_REMOVE, enable=False)
+
+            feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(number)), None)
+            if feature is not None:
+                draw = plugins.Draw(draw_options={'polyline': False,
+                                                  'rectangle': False,
+                                                  'circle': False,
+                                                  'marker': False,
+                                                  'circlemarker': False},
+                                    edit_options={'json': json.dumps(feature)})
+                draw.add_to(m)
+                dataEditPoly = io.BytesIO()
+                m.save(dataEditPoly, close_file=False)
+                frm.browser.SetPage(dataEditPoly.getvalue().decode(), '')
+
+                # Add to draw.py before "options.edit.featureGroup = drawnItems;"
+                #######################################################################################################
+                # if ("json" in options.edit){
+                #     var feature = JSON.parse(options.edit.json);
+                #     var latlngs = [];
+                #     for (var c of feature.geometry.coordinates[0]){
+                #         latlngs.push([c[1], c[0]]);
+                #     }
+                #     L.polygon(latlngs, {color: "#000000",
+                #                         weight: 1,
+                #                         fillColor: "#" + feature.properties.TerritoryTypeColor,
+                #                         fillOpacity: 0.6}).addTo(drawnItems);
+                # }
+                #######################################################################################################
+            else:
+                wx.MessageBox("There is no territory number " + str(number),
+                              "",
+                              wx.OK | wx.ICON_INFORMATION)
+                return
+        else:
+            return
+
+    def OnEditParam(self, event):
+        number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
+
+    def OnStopEdit(self, event):
+        wx.MessageBox("Not implemented yet",
+                      "",
+                      wx.OK | wx.ICON_INFORMATION)
+
+    def OnCreatePoly(self, event):
+        wx.MessageBox("Not implemented yet",
+                      "",
+                      wx.OK | wx.ICON_INFORMATION)
+
+    def OnDeletePoly(self, event):
         wx.MessageBox("Not implemented yet",
                       "",
                       wx.OK | wx.ICON_INFORMATION)
