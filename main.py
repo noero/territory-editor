@@ -1,17 +1,22 @@
 #!/usr/bin/env python
 import io
 import json
+import os
+
 import wx
 import folium
 import branca
+import wx.adv
 import wx.html2
 from folium import plugins
+from pathlib import Path
 
 
 class MapFrame(wx.Frame):
     def __init__(self, *args, **kw):
         super(MapFrame, self).__init__(*args, **kw)
 
+        self.edited_number = None
         self.mainMap = None
         self.menuBar = None
         self.features = None
@@ -120,6 +125,7 @@ class MapFrame(wx.Frame):
 
             except IOError:
                 wx.LogError("Cannot open file '%s'." % pathname)
+                return
 
     def OnSave(self, event):
         wx.MessageBox("Not implemented yet",
@@ -132,15 +138,20 @@ class MapFrame(wx.Frame):
                       wx.OK | wx.ICON_INFORMATION)
 
     def OnEditPoly(self, event):
-        number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
-        if number != '' and number != -1:
+        self.edited_number = wx.GetNumberFromUser("Which territory would you like to edit?",
+                                                  "Number: ",
+                                                  "Territory Number",
+                                                  1, min=0, max=1000)
+        if self.edited_number != '' and self.edited_number != -1:
             self.menuBar.Enable(id=wx.ID_EDIT, enable=False)
-            self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=False)
+            self.menuBar.Enable(id=wx.ID_PROPERTIES, enable=True)
             self.menuBar.Enable(id=wx.ID_APPLY, enable=True)
             self.menuBar.Enable(id=wx.ID_ADD, enable=False)
             self.menuBar.Enable(id=wx.ID_REMOVE, enable=False)
+            self.SetStatusText('Edition of territory n°' + str(self.edited_number) + '        |==> do not forget to export before exiting edition mode')
 
-            feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(number)), None)
+            feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(self.edited_number)),
+                           None)
             if feature is not None:
                 draw = plugins.Draw(draw_options={'polyline': False,
                                                   'polygon': False,
@@ -171,15 +182,34 @@ class MapFrame(wx.Frame):
                 # }
                 #######################################################################################################
             else:
-                wx.MessageBox("There is no territory number " + str(number),
+                wx.MessageBox("There is no territory number " + str(self.edited_number),
                               "",
                               wx.OK | wx.ICON_INFORMATION)
                 return
         else:
+            self.edited_number = None
             return
 
     def OnEditParam(self, event):
-        number = wx.GetNumberFromUser("Which territory would you like to edit?", "Number: ", "Territory Number", 1, min=0, max=1000)
+        if self.edited_number is None:
+            self.edited_number = wx.GetNumberFromUser("Which territory would you like to edit?",
+                                                      "Number: ",
+                                                      "Territory Number",
+                                                      1, min=0, max=1000)
+        if self.edited_number != '' and self.edited_number != -1:
+
+            feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(self.edited_number)),
+                           None)
+            if feature is not None:
+                wx.adv.PropertySheetDialog()
+            else:
+                wx.MessageBox("There is no territory number " + str(self.edited_number),
+                              "",
+                              wx.OK | wx.ICON_INFORMATION)
+                return
+        else:
+            self.edited_number = None
+            return
 
     def OnStopEdit(self, event):
         confirm = wx.MessageBox("You are going to stop editing. Would you like to merge your work?",
@@ -189,7 +219,24 @@ class MapFrame(wx.Frame):
         if confirm == wx.YES:
 
             # TODO check if export file, read it, delete it, make changes in $features
-            pass
+            with wx.FileDialog(self, "Open Exported file", defaultDir=str(Path.home() / "Téléchargements"),
+                               wildcard="GeoJSON files (data.geojson)|data.geojson",
+                               style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fileDialog:
+
+                if fileDialog.ShowModal() == wx.ID_CANCEL:
+                    return
+
+                pathname = fileDialog.GetPath()
+                try:
+                    with open(pathname, 'r') as f:
+                        new_feature = json.load(f)['features'][0]
+                    index = self.features.index(next(f for f in self.features if f['properties']['TerritoryNumber'] == str(self.edited_number)))
+                    self.features[index]['geometry']['coordinates'] = new_feature['geometry']['coordinates']
+                    os.remove(pathname)
+
+                except IOError:
+                    wx.LogError("Cannot open file '%s'." % pathname)
+                    return
 
         self.mainMap = folium.Map(
             location=[48.559400, 7.683222], tiles="OpenStreetMap", zoom_start=13
@@ -214,6 +261,8 @@ class MapFrame(wx.Frame):
         self.menuBar.Enable(id=wx.ID_APPLY, enable=False)
         self.menuBar.Enable(id=wx.ID_ADD, enable=True)
         self.menuBar.Enable(id=wx.ID_REMOVE, enable=True)
+        self.edited_number = None
+        self.SetStatusText('')
 
     def OnCreatePoly(self, event):
         wx.MessageBox("Not implemented yet",
@@ -297,7 +346,8 @@ class MapFrame(wx.Frame):
                     # white-space: nowrap;
                     display: block;
                 }
-                .form-group > span:not(:first-child):not(:last-child), .form-group .form-field:not(:first-child):not(:last-child) {
+                .form-group > span:not(:first-child):not(:last-child), 
+                .form-group .form-field:not(:first-child):not(:last-child) {
                     border-radius: 0;
                 }
                 .form-group > span:first-child, .form-group .form-field:first-child {
