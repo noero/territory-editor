@@ -11,6 +11,8 @@ import wx.html2
 from folium import plugins
 from pathlib import Path
 
+from wx.lib.wordwrap import wordwrap
+
 
 class MapFrame(wx.Frame):
     def __init__(self, *args, **kw):
@@ -191,17 +193,36 @@ class MapFrame(wx.Frame):
             return
 
     def OnEditParam(self, event):
+        isInPolyEdition = True
         if self.edited_number is None:
             self.edited_number = wx.GetNumberFromUser("Which territory would you like to edit?",
                                                       "Number: ",
                                                       "Territory Number",
                                                       1, min=0, max=1000)
+            isInPolyEdition = False
+
         if self.edited_number != '' and self.edited_number != -1:
 
             feature = next((f for f in self.features if f['properties']['TerritoryNumber'] == str(self.edited_number)),
                            None)
             if feature is not None:
-                wx.adv.PropertySheetDialog()
+                dlg = ParamDialog(self, -1, "Territory n°" + str(self.edited_number), size=(400, 400),
+                                  style=wx.DEFAULT_DIALOG_STYLE, feature=feature)
+                dlg.CenterOnScreen()
+                val = dlg.ShowModal()
+                if val == wx.ID_OK:
+                    print(dlg.zone.GetValue())
+                    print(dlg.number.GetValue())
+                    print(dlg.colour.GetColour().GetAsString(wx.C2S_HTML_SYNTAX))
+                    print(dlg.notes.GetValue())
+                    pass  # TODO
+                else:
+                    if not isInPolyEdition:
+                        self.edited_number = None
+                    dlg.Destroy()
+                    return
+
+                dlg.Destroy()
             else:
                 wx.MessageBox("There is no territory number " + str(self.edited_number),
                               "",
@@ -230,7 +251,8 @@ class MapFrame(wx.Frame):
                 try:
                     with open(pathname, 'r') as f:
                         new_feature = json.load(f)['features'][0]
-                    index = self.features.index(next(f for f in self.features if f['properties']['TerritoryNumber'] == str(self.edited_number)))
+                    index = self.features.index(next(f for f in self.features if f['properties']['TerritoryNumber'] ==
+                                                     str(self.edited_number)))
                     self.features[index]['geometry']['coordinates'] = new_feature['geometry']['coordinates']
                     os.remove(pathname)
 
@@ -275,11 +297,22 @@ class MapFrame(wx.Frame):
                       wx.OK | wx.ICON_INFORMATION)
 
     def OnAbout(self, event):
-        wx.MessageBox("Version: 1.0.1 (development state)"
-                      "\nGitHub : https://github.com/noero/Territory_Editor.git"
-                      "\nCreator: Romain Damiano",
-                      "About Territory Editor",
-                      wx.OK | wx.ICON_INFORMATION)
+        info = wx.adv.AboutDialogInfo()
+        info.Name = "About Territory Editor"
+        info.Version = "1.0.2"
+        info.Copyright = "(c) 2021 Noero"
+        info.Description = wordwrap(
+            "A \"Territory Editor\" program is a software program that helps the "
+            "territory servant to edit the territories of his congregation."
+
+            "\n\nHe will be able to create or recreate easily PDF files with maps "
+            "and information regarding a specific territory or all off them.",
+            350, wx.ClientDC(self))
+        info.WebSite = ("https://github.com/noero/Territory_Editor.git", "Territory Editor home page")
+        info.Developers = ["Romain Damiano"]
+
+        # Then we call wx.AboutBox giving it that info object
+        wx.adv.AboutBox(info)
 
     def customPopup(self, feature):
         name = feature['properties']['name']
@@ -466,6 +499,75 @@ class MapFrame(wx.Frame):
         iframe = branca.element.IFrame(html=html, width=350, height=400)
         popup = folium.Popup(iframe, max_width=2650)
         return popup
+
+
+class ParamDialog(wx.Dialog):
+    def __init__(
+            self, parent, id, title, size=wx.DefaultSize, pos=wx.DefaultPosition,
+            style=wx.DEFAULT_DIALOG_STYLE, name='dialog', feature=None
+    ):
+        wx.Dialog.__init__(self)
+        self.Create(parent, id, title, pos, size, style, name)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        label = wx.StaticText(self, -1, "Parameters' edition")
+        sizer.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        box = wx.BoxSizer(wx.HORIZONTAL)
+        terType = feature['properties']["TerritoryType"]
+        color = feature['properties']["TerritoryTypeColor"]
+        num = feature['properties']["TerritoryNumber"]
+        note = feature['properties']["TerritoryNotes"] or ""
+
+        label = wx.StaticText(self, -1, "Zone:")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.zone = wx.TextCtrl(self, -1, terType, size=(80, -1))
+        box.Add(self.zone, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        sizer.Add(box, 0, wx.EXPAND | wx.ALL, 5)
+        box = wx.BoxSizer(wx.HORIZONTAL)
+
+        label = wx.StaticText(self, -1, "Color:")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.colour = wx.ColourPickerCtrl(self, -1, "#" + color, size=(80, -1))
+        box.Add(self.colour, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        sizer.Add(box, 0, wx.EXPAND | wx.ALL, 5)
+        box = wx.BoxSizer(wx.HORIZONTAL)
+
+        label = wx.StaticText(self, -1, "Number:")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.number = wx.SpinCtrl(self, -1, num, size=(80, -1), min=1, max=1000)
+        box.Add(self.number, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        sizer.Add(box, 0, wx.EXPAND | wx.ALL, 5)
+        box = wx.BoxSizer(wx.HORIZONTAL)
+
+        label = wx.StaticText(self, -1, "Notes:")
+        box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+        self.notes = wx.TextCtrl(self, -1, note, size=(200, -1), style=wx.TE_MULTILINE|wx.TE_RICH2)
+        box.Add(self.notes, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
+
+        sizer.Add(box, 0, wx.EXPAND | wx.ALL, 5)
+
+        # line = wx.StaticLine(self, -1, size=(20, -1), style=wx.LI_HORIZONTAL)
+        # sizer.Add(line, 0, wx.EXPAND | wx.RIGHT | wx.TOP, 5)
+
+        btnsizer = wx.StdDialogButtonSizer()
+
+        btn = wx.Button(self, wx.ID_OK)
+        btn.SetDefault()
+        btnsizer.AddButton(btn)
+
+        btn = wx.Button(self, wx.ID_CANCEL)
+        btnsizer.AddButton(btn)
+        btnsizer.Realize()
+
+        sizer.Add(btnsizer, 0, wx.ALL, 5)
+
+        self.SetSizer(sizer)
+        sizer.Fit(self)
 
 
 if __name__ == '__main__':
