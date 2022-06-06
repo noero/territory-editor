@@ -23,6 +23,9 @@ class MapFrame(wx.Frame):
         self.menuBar = None
         self.features = None
 
+        # TODO do not work
+        self.SetIcon(wx.Icon("icon.ico", wx.BITMAP_TYPE_ICO))
+
         self.SetSize((1280, 720))
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.browser = wx.html2.WebView.New(self)
@@ -211,11 +214,16 @@ class MapFrame(wx.Frame):
                 dlg.CenterOnScreen()
                 val = dlg.ShowModal()
                 if val == wx.ID_OK:
-                    print(dlg.zone.GetValue())
-                    print(dlg.number.GetValue())
-                    print(dlg.colour.GetColour().GetAsString(wx.C2S_HTML_SYNTAX))
-                    print(dlg.notes.GetValue())
-                    pass  # TODO
+                    index = self.features.index(next(f for f in self.features if f['properties']['TerritoryNumber'] ==
+                                                     str(self.edited_number)))
+                    print(self.features[index])
+                    self.features[index]['properties']["TerritoryType"] = dlg.zone.GetValue()
+                    self.features[index]['properties']["TerritoryNumber"] = str(dlg.number.GetValue())
+                    self.features[index]['properties']["TerritoryTypeColor"] = \
+                        dlg.colour.GetColour().GetAsString(wx.C2S_HTML_SYNTAX).strip('#')
+                    self.features[index]['properties']["TerritoryNotes"] = dlg.notes.GetValue()
+                    self.edited_number = None
+                    print(self.features[index])
                 else:
                     if not isInPolyEdition:
                         self.edited_number = None
@@ -299,8 +307,8 @@ class MapFrame(wx.Frame):
     def OnAbout(self, event):
         info = wx.adv.AboutDialogInfo()
         info.Name = "About Territory Editor"
-        info.Version = "1.0.2"
-        info.Copyright = "(c) 2021 Noero"
+        info.Version = "1.0.3"
+        info.Copyright = "(c) 2022 Noero"
         info.Description = wordwrap(
             "A \"Territory Editor\" program is a software program that helps the "
             "territory servant to edit the territories of his congregation."
@@ -310,6 +318,7 @@ class MapFrame(wx.Frame):
             350, wx.ClientDC(self))
         info.WebSite = ("https://github.com/noero/Territory_Editor.git", "Territory Editor home page")
         info.Developers = ["Romain Damiano"]
+        info.SetIcon(wx.Icon("icon.ico", wx.BITMAP_TYPE_ICO))
 
         # Then we call wx.AboutBox giving it that info object
         wx.adv.AboutBox(info)
