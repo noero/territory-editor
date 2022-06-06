@@ -2,7 +2,6 @@
 import io
 import json
 import os
-
 import wx
 import folium
 import branca
@@ -10,8 +9,11 @@ import wx.adv
 import wx.html2
 from folium import plugins
 from pathlib import Path
-
 from wx.lib.wordwrap import wordwrap
+
+
+def get_version():
+    return '1.0.3'
 
 
 class MapFrame(wx.Frame):
@@ -307,7 +309,7 @@ class MapFrame(wx.Frame):
     def OnAbout(self, event):
         info = wx.adv.AboutDialogInfo()
         info.Name = "About Territory Editor"
-        info.Version = "1.0.3"
+        info.Version = get_version()
         info.Copyright = "(c) 2022 Noero"
         info.Description = wordwrap(
             "A \"Territory Editor\" program is a software program that helps the "
